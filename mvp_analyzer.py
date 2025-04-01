@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 import openai
 from typing import Dict, Any
+from job_search import JobSearch
 
 # Load environment variables
 load_dotenv()
@@ -101,9 +102,19 @@ def get_available_models() -> Dict[str, str]:
         'gpt-3.5-turbo': 'OpenAI GPT-3.5 Turbo'
     }
 
+def get_mode_selection() -> str:
+    """Get the mode selection from user."""
+    print("\nSelect Mode:")
+    print("1: Code Analysis")
+    print("2: Job Search")
+    while True:
+        mode = input("\nEnter mode number: ").strip()
+        if mode in ['1', '2']:
+            return mode
+        print("Invalid selection. Please try again.")
+
 def main():
-    parser = argparse.ArgumentParser(description='AI Code Analyzer')
-    parser.add_argument('directory', help='Directory to analyze')
+    parser = argparse.ArgumentParser(description='AI Assistant')
     parser.add_argument('--output', '-o', help='Output file for results')
     args = parser.parse_args()
 
@@ -120,42 +131,68 @@ def main():
             break
         print("Invalid model choice. Please try again.")
 
-    print(f"\n🔍 Starting Code Analysis (Using {available_models[model_choice]})")
-    
-    analyzer = SimpleCodeAnalyzer(args.directory, model_choice)
-    code_files = analyzer.scan_directory()
-    
-    if not code_files:
-        print("No supported code files found.")
-        return
+    # Get mode selection
+    mode = get_mode_selection()
 
-    print(f"\nFound {len(code_files)} code files to analyze.")
-    
-    results = []
-    for file_data in code_files:
-        print(f"\nAnalyzing: {file_data['path']}")
-        result = analyzer.analyze_code(file_data)
-        results.append(result)
+    if mode == '1':
+        # Code Analysis Mode
+        directory = input("\nEnter the directory to analyze: ").strip()
+        print(f"\n🔍 Starting Code Analysis (Using {available_models[model_choice]})")
         
-        if 'error' in result:
-            print(f"Error analyzing {result['path']}: {result['error']}")
-        else:
-            print("\nSuggestions:")
-            print(result['suggestions'])
-            print("-" * 50)
+        analyzer = SimpleCodeAnalyzer(directory, model_choice)
+        code_files = analyzer.scan_directory()
+        
+        if not code_files:
+            print("No supported code files found.")
+            return
 
-    if args.output:
-        try:
-            with open(args.output, 'w', encoding='utf-8') as f:
-                for result in results:
-                    f.write(f"\n=== {result['path']} ===\n")
-                    if 'error' in result:
-                        f.write(f"Error: {result['error']}\n")
-                    else:
-                        f.write(result['suggestions'] + "\n")
-            print(f"\nResults saved to {args.output}")
-        except Exception as e:
-            print(f"Error saving results: {str(e)}")
+        print(f"\nFound {len(code_files)} code files to analyze.")
+        
+        results = []
+        for file_data in code_files:
+            print(f"\nAnalyzing: {file_data['path']}")
+            result = analyzer.analyze_code(file_data)
+            results.append(result)
+            
+            if 'error' in result:
+                print(f"Error analyzing {result['path']}: {result['error']}")
+            else:
+                print("\nSuggestions:")
+                print(result['suggestions'])
+                print("-" * 50)
+
+        if args.output:
+            try:
+                with open(args.output, 'w', encoding='utf-8') as f:
+                    for result in results:
+                        f.write(f"\n=== {result['path']} ===\n")
+                        if 'error' in result:
+                            f.write(f"Error: {result['error']}\n")
+                        else:
+                            f.write(result['suggestions'] + "\n")
+                print(f"\nResults saved to {args.output}")
+            except Exception as e:
+                print(f"Error saving results: {str(e)}")
+
+    else:
+        # Job Search Mode
+        print(f"\n🔍 Starting Job Search (Using {available_models[model_choice]})")
+        ai_handler = AIModelHandler(model_choice)
+        job_search = JobSearch(ai_handler)
+        
+        # Get user preferences
+        preferences = job_search.get_user_preferences()
+        
+        # Search for jobs
+        print("\nSearching for jobs...")
+        jobs = job_search.search_jobs(preferences)
+        
+        if jobs:
+            # Save results
+            output_file = args.output if args.output else None
+            job_search.save_to_csv(jobs, output_file)
+        else:
+            print("No jobs found matching your criteria.")
 
 if __name__ == '__main__':
     main() 
